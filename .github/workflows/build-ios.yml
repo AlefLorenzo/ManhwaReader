@@ -1,0 +1,86 @@
+name: Build iOS App
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build iOS App
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install xtool
+        run: |
+          curl -fsSL https://github.com/xtool-org/xtool/releases/download/2.0.0-beta.2/xtool.app.zip -o xtool.app.zip
+          unzip -q xtool.app.zip
+          sudo mv xtool.app /Applications/xtool.app
+          sudo ln -sf /Applications/xtool.app/Contents/Resources/bin/xtool /usr/local/bin/xtool
+
+      - name: Setup xtool
+        run: |
+          xtool setup
+        env:
+          # For API Key authentication (paid Apple Developer Program)
+          # APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          # APP_STORE_CONNECT_API_ISSUER: ${{ secrets.APP_STORE_CONNECT_API_ISSUER }}
+          # APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          # For password authentication (any Apple ID)
+          # XTOOL_APPLE_ID: ${{ secrets.XTOOL_APPLE_ID }}
+          # XTOOL_PASSWORD: ${{ secrets.XTOOL_PASSWORD }}
+
+      - name: Build iOS App
+        run: |
+          cd ManhwaReader
+          xtool dev run --configuration release --udid ${{ secrets.IOS_DEVICE_UDID }}
+        env:
+          # For device deployment
+          # IOS_DEVICE_UDID: ${{ secrets.IOS_DEVICE_UDID }}
+
+      - name: Build IPA for distribution
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+        run: |
+          cd ManhwaReader
+          # Build for generic iOS device
+          xtool dev run --configuration release
+          # The IPA will be in .build/artifacts/
+
+      - name: Upload IPA Artifact
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ManhwaReader-IPA
+          path: ManhwaReader/.build/artifacts/*.ipa
+          retention-days: 30
+
+  build-simulator:
+    name: Build for Simulator
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install xtool
+        run: |
+          curl -fsSL https://github.com/xtool-org/xtool/releases/download/2.0.0-beta.2/xtool.app.zip -o xtool.app.zip
+          unzip -q xtool.app.zip
+          sudo mv xtool.app /Applications/xtool.app
+          sudo ln -sf /Applications/xtool.app/Contents/Resources/bin/xtool /usr/local/bin/xtool
+
+      - name: Setup xtool
+        run: |
+          xtool setup
+
+      - name: Build for Simulator
+        run: |
+          cd ManhwaReader
+          xtool dev run --configuration debug --simulator
